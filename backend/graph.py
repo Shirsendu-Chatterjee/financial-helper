@@ -1,98 +1,292 @@
-import subprocess
 from pathlib import Path
+import subprocess
+
+from langgraph.graph import StateGraph, END
+
 from hybrid_retriever import HybridRetriever
 from prompt import SYSTEM_PROMPT
 from llm import llm
 
+from state import GraphState
 
-def ensure_indexed(ticker: str):
+
+
+# -----------------------------
+# NODE 1
+# -----------------------------
+
+def ensure_index_node(state: GraphState):
+
+    ticker = state["ticker"]
 
     index_dir = Path("indexes") / ticker
 
+
     if (index_dir / "chunks.pkl").exists():
-        print(f"Index for {ticker} found, skipping fetch.")
-        return True
 
-    print(f"Index for {ticker} not found. Running get_files.py to fetch and index.")
+        print("Index exists")
 
-    # Run the existing script which prompts for the ticker
+        return state
+
+
+    print("Creating index...")
+
+
     proc = subprocess.run(
-        ["python", "backend/get_files.py"],
-        input=ticker + "\n",
+        [
+            "python",
+            "backend/get_files.py"
+        ],
+        input=ticker+"\n",
         text=True
     )
 
-    return proc.returncode == 0
+
+    if proc.returncode != 0:
+        raise Exception(
+            "Index creation failed"
+        )
 
 
-def build_context(retrieved_docs, max_chunks=5):
-
-    parts = []
-
-    for d in retrieved_docs[:max_chunks]:
-        parts.append(f"Section: {d.get('section')}\nText:\n{d.get('text')}\n---\nSource: {d.get('ticker')} | chunk_id={d.get('chunk_id')}")
-
-    return "\n\n".join(parts)
+    return state
 
 
-def ask_llm(system_prompt: str, context: str, question: str):
-
-    user_msg = f"CONTEXT:\n{context}\n\nQuestion: {question}\nAnswer:" 
-
-    try:
-        # ChatGroq expects a list of messages; use `invoke` as documented
-        messages = [
-            ("system", system_prompt),
-            ("human", user_msg),
-        ]
-
-        resp = llm.invoke(messages)
-
-        # `invoke` returns an AIMessage-like object; try to get `.content`
-        try:
-            return resp.content
-        except Exception:
-            return str(resp)
-
-    except Exception as e:
-        return f"LLM invocation failed: {e}"
 
 
-def main():
+# -----------------------------
+# NODE 2
+# -----------------------------
 
-    ticker = input("Enter company ticker or CIK: ").strip().upper()
+def retrieve_node(state: GraphState):
 
-    ok = ensure_indexed(ticker)
+    ticker = state["ticker"]
 
-    if not ok:
-        print("Failed to fetch/index filings. Exiting.")
-        return
+    query = state["question"]
+
 
     retriever = HybridRetriever(ticker)
 
-    print("\nReady. Ask questions (type 'exit' to quit). Answers will be produced using RAG + LLM.")
+
+    docs = retriever.search(query)
+
+
+    return {
+
+        "retrieved_docs": docs
+
+    }
+
+
+
+
+# -----------------------------
+# NODE 3
+# -----------------------------
+
+def context_node(state: GraphState):
+
+    docs = state["retrieved_docs"]
+
+
+    parts=[]
+
+
+    for d in docs[:5]:
+
+        parts.append(
+            f"""
+Section:
+{d.get('section')}
+
+Text:
+{d.get('text')}
+
+Source:
+{d.get('ticker')}
+chunk_id:
+{d.get('chunk_id')}
+"""
+        )
+
+
+    return {
+
+        "context":"\n\n".join(parts)
+
+    }
+
+
+
+
+# -----------------------------
+# NODE 4
+# -----------------------------
+
+def llm_node(state: GraphState):
+
+
+    messages=[
+
+        (
+            "system",
+            SYSTEM_PROMPT
+        ),
+
+        (
+            "human",
+            f"""
+CONTEXT:
+
+{state['context']}
+
+
+QUESTION:
+
+{state['question']}
+
+
+Answer:
+"""
+        )
+
+    ]
+
+
+    response = llm.invoke(messages)
+
+
+    return {
+
+        "answer":response.content
+
+    }
+
+
+
+# -----------------------------
+# BUILD GRAPH
+# -----------------------------
+
+
+workflow = StateGraph(GraphState)
+
+
+
+workflow.add_node(
+    "ensure_index",
+    ensure_index_node
+)
+
+
+workflow.add_node(
+    "retrieve",
+    retrieve_node
+)
+
+
+workflow.add_node(
+    "context",
+    context_node
+)
+
+
+workflow.add_node(
+    "generate",
+    llm_node
+)
+
+
+
+workflow.set_entry_point(
+    "ensure_index"
+)
+
+
+workflow.add_edge(
+    "ensure_index",
+    "retrieve"
+)
+
+
+workflow.add_edge(
+    "retrieve",
+    "context"
+)
+
+
+workflow.add_edge(
+    "context",
+    "generate"
+)
+
+
+workflow.add_edge(
+    "generate",
+    END
+)
+
+
+
+app = workflow.compile()
+
+
+
+
+# -----------------------------
+# RUN
+# -----------------------------
+
+
+if __name__=="__main__":
+
+
+    ticker=input(
+        "Ticker: "
+    ).strip().upper()
+
 
     while True:
 
-        q = input("\nQuestion: ")
 
-        if q.lower() in ("exit", "quit"):
+        question=input(
+            "\nQuestion: "
+        )
+
+
+        if question=="exit":
             break
 
-        docs = retriever.search(q)
-
-        context = build_context(docs, max_chunks=5)
-
-        answer = ask_llm(SYSTEM_PROMPT, context, q)
-
-        print("\n" + "="*80)
-        print("Answer:\n")
-        print(answer)
-        print("\nSources:")
-
-        for d in docs[:5]:
-            print(f"- {d.get('ticker')} | section={d.get('section')} | chunk_id={d.get('chunk_id')}")
 
 
-if __name__ == "__main__":
-    main()
+        result=app.invoke(
+            {
+
+                "ticker":ticker,
+
+                "question":question,
+
+                "retrieved_docs":[],
+
+                "context":"",
+
+                "answer":""
+
+            }
+        )
+
+
+        print("\nANSWER:")
+        print(
+            result["answer"]
+        )
+
+
+        print("\nSOURCES:")
+
+        for d in result["retrieved_docs"][:5]:
+
+            print(
+                d["ticker"],
+                d["section"],
+                d["chunk_id"]
+            )
