@@ -1,16 +1,8 @@
 # Financial Filing RAG Assistant
 
-A production-oriented Retrieval-Augmented Generation (RAG) system for querying SEC EDGAR filings using hybrid retrieval, LangGraph orchestration, and Large Language Models.
+A production-oriented Retrieval-Augmented Generation (RAG) system for querying SEC EDGAR filings using hybrid retrieval and LangGraph orchestration.
 
-The application is designed for financial analysts and enterprise users who frequently work with SEC filings and need fast, accurate, and citation-backed answers without manually searching hundreds of pages of annual reports.
-
----
-
-# Overview
-
-Instead of asking an LLM directly, the system first retrieves the most relevant sections from SEC filings and then generates answers only from those retrieved documents.
-
-This significantly reduces hallucinations while ensuring responses remain grounded in official SEC filings.
+The application is designed for financial analysts and enterprise users who frequently work with SEC filings and need fast, accurate, citation-backed answers without manually searching hundreds of pages of annual reports.
 
 ---
 
@@ -52,20 +44,19 @@ This significantly reduces hallucinations while ensuring responses remain ground
                     │
              Merge Results
                     │
-              Cross Encoder
-                Reranker
-                    │
-                 Top Chunks
+              Remove Duplicates
                     │
                     ▼
             Large Language Model
-                    │
-                    ▼
+                     │
+                     ▼
         Citation + Confidence Score
-                    │
-                    ▼
+                     │
+                     ▼
                  Final Answer
 ```
+
+> Note: the README for this repository only implements hybrid retrieval (BM25 + dense) followed by an LLM. A cross-encoder reranker is documented in the roadmap but is not yet part of the pipeline.
 
 ---
 
@@ -75,16 +66,14 @@ This significantly reduces hallucinations while ensuring responses remain ground
 
 The user provides a company ticker.
 
-The system automatically downloads the latest SEC filing directly from EDGAR using the `edgartools` library.
+The system downloads the latest SEC filing directly from EDGAR using the `edgartools` library.
 
-Supported filings include:
+Supported filings:
 
-- 10-K
-- 10-Q
+- 10-K (primary)
+- 10-Q (through the same code path)
 - 8-K (future)
 - DEF 14A (future)
-
----
 
 ## 2. Cleaning
 
@@ -97,8 +86,6 @@ Raw SEC filings contain:
 - inline XBRL noise
 
 The cleaning pipeline removes unnecessary formatting while preserving tables and financial statements.
-
----
 
 ## 3. Section-aware Chunking
 
@@ -127,8 +114,6 @@ Each chunk stores metadata including:
 
 This allows precise retrieval and citation generation.
 
----
-
 ## 4. Hybrid Search
 
 The system combines two retrieval methods.
@@ -148,11 +133,9 @@ Examples:
 - goodwill impairment
 - inventory valuation
 
----
-
 ### Dense Vector Retrieval
 
-Sentence embeddings generated using
+Sentence embeddings generated using:
 
 ```
 BAAI/bge-small-en-v1.5
@@ -161,8 +144,6 @@ BAAI/bge-small-en-v1.5
 Stored in ChromaDB for semantic similarity search.
 
 Dense retrieval excels at finding conceptually similar information even when wording differs.
-
----
 
 ### Hybrid Retrieval
 
@@ -183,23 +164,13 @@ Top 20       Top 20
    Merge Results
 
         │
-
- Remove Duplicates
-
+        │ Remove Duplicates
         │
-
-   Cross Encoder
-
-        │
-
-     Top Chunks
-
-        │
-
+        ▼
        LLM
 ```
 
-Combining sparse and dense retrieval improves recall while maintaining precision.
+Combining sparse and dense retrieval improves recall while maintaining precision. The current pipeline returns merged, de-duplicated chunks and passes them to the LLM. Cross-encoder reranking is planned for a future release.
 
 ---
 
@@ -217,10 +188,6 @@ Query Understanding
    │
 
 Retrieve
-
-   │
-
-Rerank
 
    │
 
@@ -247,19 +214,9 @@ Each stage is modular and independently replaceable.
 
 ## Retrieval
 
-- BM25
+- BM25 (rank-bm25)
 - ChromaDB
-- Sentence Transformers
-
----
-
-## Embeddings
-
-```
-BAAI/bge-small-en-v1.5
-```
-
----
+- Sentence Transformers (BAAI/bge-small-en-v1.5)
 
 ## LLM
 
@@ -272,20 +229,14 @@ Examples:
 - Gemini
 - Ollama
 
----
-
 ## Framework
 
 - LangGraph
 - LangChain
 
----
-
 ## Data Source
 
 - SEC EDGAR
-
----
 
 ## Language
 
@@ -298,8 +249,8 @@ Python
 - Automatic SEC filing download
 - Section-aware document chunking
 - Metadata-aware retrieval
-- Hybrid search
-- Persistent vector database
+- Hybrid search (BM25 + dense embeddings)
+- Persistent vector database (ChromaDB)
 - Persistent BM25 index
 - Company-specific indexes
 - Semantic retrieval
@@ -315,14 +266,11 @@ Python
 ```
 backend/
 
-│
 ├── get_files.py
 ├── section_chunker.py
 ├── hybrid_index.py
 ├── hybrid_retriever.py
 ├── graph.py
-├── chat.py
-├── prompts.py
 ├── llm.py
 ├── state.py
 │
@@ -391,8 +339,6 @@ Persist Index
 
 Runs only once per company.
 
----
-
 ## Serving
 
 ```
@@ -419,7 +365,7 @@ The chatbot never re-downloads or re-embeds documents.
 
 ---
 
-# Future Improvements
+# Roadmap
 
 - Cross-Encoder reranking
 - Multi-filing retrieval (10-K + 10-Q + 8-K)
@@ -431,6 +377,7 @@ The chatbot never re-downloads or re-embeds documents.
 - PDF report generation
 - SEC citation highlighting
 - Real-time filing monitoring
+- Confidence scoring on answers
 
 ---
 
