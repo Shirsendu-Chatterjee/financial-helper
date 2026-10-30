@@ -3,10 +3,20 @@ import os
 from langchain_groq import ChatGroq
 
 # ------------------------------------------------------------------
-# HARDCODED GROQ API KEY (temporary — remove this and use the
-# GROQ_API_KEY environment variable before committing/sharing).
+# HARDCODED GROQ API KEY (DEV ONLY).
+#
+# For local dev you can paste your key here so the server runs without
+# setting GROQ_API_KEY in the shell. This file is committed, so never
+# leave a real key here in a shared / shipped checkout.
+#
+# Runtime already prefers the env var over this constant, so the Docker
+# image simply needs -e GROQ_API_KEY=<key> and this can stay empty.
+#
+# Before pushing to GitHub or building the Docker image:
+#   - leave this empty (as below), OR
+#   - use a .env file that is gitignored.
 # ------------------------------------------------------------------
-HARDCODED_GROQ_API_KEY = "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"
+HARDCODED_GROQ_API_KEY = ""
 
 
 def get_llm():

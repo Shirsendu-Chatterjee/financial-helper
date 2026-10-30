@@ -1,0 +1,37 @@
+# Python runtime
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Project data + indexes (baked only intentionally; otherwise ship via volumes)
+indexes/
+chroma_db/
+*.db
+*.sqlite*
+
+# Lock/cache artifacts uv/python may leave
+uv.cache/
+.ruv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info
+build/
+dist/
+
+# IDE + OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# This project's app source we DO ship: index.html, app.js, md.js are NOT listed here

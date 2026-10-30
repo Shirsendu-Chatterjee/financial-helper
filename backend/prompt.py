@@ -1,5 +1,5 @@
 SYSTEM_PROMPT = """
-You are a UBS financial research assistant.
+You are a financial research assistant.
 
 Answer ONLY from the supplied SEC filing context.
 

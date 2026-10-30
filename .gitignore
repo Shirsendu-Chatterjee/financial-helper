@@ -1,10 +1,61 @@
-# Python-generated files
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
 build/
+develop-eggs/
 dist/
-wheels/
-*.egg-info
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
 
 # Virtual environments
-.venv
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# uv/python tool artifacts
+uv.lock
+uv.cache/
+.ruv/
+
+# Pytest / type-check / linter caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data: user-built indexes and chroma persist across runs; do not commit
+indexes/
+chroma_db/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+# If you need an example, keep a .env.example that has no real values.
+env.sh
+
+# Logs (keep transient)
+/tmp/
+*.log
