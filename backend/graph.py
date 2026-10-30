@@ -3,11 +3,12 @@ import subprocess
 
 from langgraph.graph import StateGraph, END
 
-from hybrid_retriever import HybridRetriever
-from prompt import SYSTEM_PROMPT
-from llm import llm
+from .hybrid_retriever import HybridRetriever
+from .prompt import SYSTEM_PROMPT
+from .llm import llm
 
-from state import GraphState
+from .state import GraphState
+
 
 
 
@@ -32,20 +33,15 @@ def ensure_index_node(state: GraphState):
     print("Creating index...")
 
 
-    proc = subprocess.run(
-        [
-            "python",
-            "backend/get_files.py"
-        ],
-        input=ticker+"\n",
-        text=True
+    from .get_files import fetch_and_index
+
+    import os
+
+
+    fetch_and_index(
+        ticker,
+        identity_email=os.environ.get("EDGAR_IDENTITY_EMAIL"),
     )
-
-
-    if proc.returncode != 0:
-        raise Exception(
-            "Index creation failed"
-        )
 
 
     return state
@@ -237,56 +233,3 @@ app = workflow.compile()
 # -----------------------------
 
 
-if __name__=="__main__":
-
-
-    ticker=input(
-        "Ticker: "
-    ).strip().upper()
-
-
-    while True:
-
-
-        question=input(
-            "\nQuestion: "
-        )
-
-
-        if question=="exit":
-            break
-
-
-
-        result=app.invoke(
-            {
-
-                "ticker":ticker,
-
-                "question":question,
-
-                "retrieved_docs":[],
-
-                "context":"",
-
-                "answer":""
-
-            }
-        )
-
-
-        print("\nANSWER:")
-        print(
-            result["answer"]
-        )
-
-
-        print("\nSOURCES:")
-
-        for d in result["retrieved_docs"][:5]:
-
-            print(
-                d["ticker"],
-                d["section"],
-                d["chunk_id"]
-            )

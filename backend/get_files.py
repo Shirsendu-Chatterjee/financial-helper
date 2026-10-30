@@ -1,85 +1,71 @@
-from edgar import Company, set_identity
+import os
 import re
-from section_chunker import SectionChunker
-from hybrid_index import HybridIndexer
-from hybrid_retriever import HybridRetriever
+from typing import Optional
+
+from edgar import Company
+from edgar.core import set_identity
+from .section_chunker import SectionChunker
+from .hybrid_index import HybridIndexer
 
 
-# Required by SEC
-set_identity("shirsendu chattshirsendu05@gmai.com")
+def fetch_and_index(
+    ticker: str,
+    identity_email: Optional[str] = None,
+    form: str = "10-K",
+    batch_size: int = 32,
+) -> dict:
+    """Download the latest SEC filing for *ticker*, clean it,
+    chunk it section-aware, and build both the BM25 + Chroma
+    indexes. Raises on failure so callers can surface the error."""
 
-ticker = input("Enter company ticker or CIK: ").upper()
+    identity_email = (
+        identity_email
+        or os.environ.get("EDGAR_IDENTITY_EMAIL")
+        or os.environ.get("EDGAR_IDENTITY")
+        or ""
+    )
 
-company = Company(ticker)
+    if identity_email:
+        set_identity(identity_email)
 
-# Get latest 10-K
-filing = company.get_filings(form="10-K").latest()
-text = filing.text()
+    ticker = ticker.strip().upper()
+    company = Company(ticker)
 
+    # Get the latest filing of the requested form
+    filings = company.get_filings(form=form)
+    filing = filings.latest()
+    text = filing.text()
 
-# Save filing locally
+    # Remove excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
+    # Remove trailing spaces
+    text = re.sub(r"[ \t]+", " ", text)
 
-# Remove excessive blank lines
-text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+    chunker = SectionChunker()
 
-# Remove trailing spaces
-text = re.sub(r"[ \t]+", " ", text)
+    chunks = chunker.create_chunks(
+        text=text,
+        ticker=ticker,
+        company=filing.company,
+        filing_type=filing.form,
+        filing_date=str(filing.filing_date),
+        cik=company.cik,
+    )
 
-text = text.strip()
-print(text)
+    indexer = HybridIndexer()
 
-print("Done!\n\n\n")
+    indexer.build(
+        ticker=ticker,
+        chunks=chunks,
+        batch_size=batch_size,
+    )
 
-
-
-
-chunker = SectionChunker()
-
-chunks = chunker.create_chunks(
-    text=text,
-    ticker=ticker,
-    company=filing.company,
-    filing_type=filing.form,
-    filing_date=str(filing.filing_date),
-    cik=company.cik
-)
-
-print("Chunks:", len(chunks))
-
-indexer = HybridIndexer()
-
-indexer.build(
-    ticker=ticker,
-    chunks=chunks,
-    batch_size=32
-)
-print("doneeee")
-
-
-
-
-
-# retriever = HybridRetriever(chunks)
-
-# while True:
-
-#     query = input("\nAsk a question ('exit' to quit): ")
-
-#     if query.lower() == "exit":
-#         break
-
-#     results = retriever.search(query)
-
-#     print("\n" + "="*100)
-
-#     for i, chunk in enumerate(results[:5], 1):
-
-#         print(f"\nResult {i}")
-#         print(f"Company : {chunk['company']}")
-#         print(f"Section : {chunk['section']}")
-#         print(f"Chunk ID: {chunk['chunk_id']}")
-#         print("-"*100)
-#         print(chunk["text"][:800])
-#         print("-"*100)
-
+    return {
+        "ticker": ticker,
+        "company": str(filing.company),
+        "filing_type": filing.form,
+        "filing_date": str(filing.filing_date),
+        "chunks": len(chunks),
+    }

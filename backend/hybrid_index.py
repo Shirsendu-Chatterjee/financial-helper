@@ -1,9 +1,13 @@
 from pathlib import Path
 import pickle
 
+from pathlib import Path
+import pickle
+
 import chromadb
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
+
 
 
 class HybridIndexer:
